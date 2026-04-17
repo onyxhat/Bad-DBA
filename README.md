@@ -1,6 +1,6 @@
 # Bad DBA PowerShell Module
 
-Quick and dirty database administration PowerShell module for database administration with ZERO external dependencies. Including backup/restore operations, database mirroring, and automated deployment workflows.
+Quick and dirty database administration PowerShell module with ZERO external dependencies. Including backup/restore operations, database mirroring, and automated deployment workflows.
 
 ---
 
