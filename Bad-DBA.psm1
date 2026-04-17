@@ -4,26 +4,26 @@ function Invoke-SafeSqlCommand {
     Param (
         [Parameter(Mandatory=$true)]
         [psobject]$ConnectionString,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$Query,
-        
+
         [hashtable]$Parameters = @{},
-        
+
         [switch]$NonQuery
     )
-    
+
     $Connection = $null
     Try {
         $Connection = New-Object System.Data.SqlClient.SqlConnection($ConnectionString)
         $Connection.Open()
-        
+
         $Command = New-Object System.Data.SqlClient.SqlCommand($Query, $Connection)
-        
+
         foreach ($param in $Parameters.GetEnumerator()) {
             $Command.Parameters.AddWithValue($param.Key, $param.Value) | Out-Null
         }
-        
+
         if ($NonQuery) {
             $result = $Command.ExecuteNonQuery()
         } else {
@@ -32,7 +32,7 @@ function Invoke-SafeSqlCommand {
             $Adapter.Fill($DataSet) | Out-Null
             $result = $DataSet.Tables[0]
         }
-        
+
         return $result
     }
     Catch {
@@ -54,20 +54,20 @@ function Write-SqlStatus {
     Param (
         [Parameter(Mandatory=$true)]
         [string]$Operation,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$Database,
-        
+
         [ValidateSet('Start','Complete','Failed')]
         [string]$Status
     )
-    
+
     $messages = @{
         'Start' = "Starting ${Operation} on [${Database}]"
         'Complete' = "${Operation} complete on [${Database}]"
         'Failed' = "${Operation} failed on [${Database}]"
     }
-    
+
     switch ($Status) {
         'Start' { Write-Verbose $messages[$Status] }
         'Complete' { Write-Verbose $messages[$Status] }
@@ -80,13 +80,13 @@ function Invoke-SimpleSqlQuery {
     Param (
         [Parameter(Mandatory=$true)]
         [psobject]$ConnectionString,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$Query,
-        
+
         [switch]$UseMaster
     )
-    
+
     $cs = if ($UseMaster) { $ConnectionString.Master } else { $ConnectionString }
     Invoke-Sql -ConnectionString $cs -Query $Query
 }
@@ -96,24 +96,24 @@ function Test-SqlIdentifier {
     Param (
         [Parameter(Mandatory=$true)]
         [string]$Value,
-        
+
         [Parameter(Mandatory=$true)]
         [ValidateSet('Username','Role','Schema')]
         [string]$Type
     )
-    
+
     $patterns = @{
         'Username' = '^[a-zA-Z0-9_\-\.@\\]+$'
         'Role' = '^[a-zA-Z0-9_]+$'
         'Schema' = '^[a-zA-Z0-9_]+$'
     }
-    
+
     $messages = @{
         'Username' = "Only alphanumeric characters, underscores, hyphens, dots, @ and backslash are allowed"
         'Role' = "Only alphanumeric characters and underscores are allowed"
         'Schema' = "Only alphanumeric characters and underscores are allowed"
     }
-    
+
     if ($Value -notmatch $patterns[$Type]) {
         throw "Invalid ${Type} format: ${Value}. $($messages[$Type])"
     }
@@ -124,25 +124,25 @@ function New-BackupScript {
     Param (
         [Parameter(Mandatory=$true)]
         [string]$Database,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$BackupPath,
-        
+
         [ValidateSet('FULL','LOG')]
         [string]$BackupType = 'FULL',
-        
+
         [switch]$CopyOnly
     )
-    
+
     $backupCommand = if ($BackupType -eq 'FULL') { 'BACKUP DATABASE' } else { 'BACKUP LOG' }
     $backupName = "${Database}_$(Get-Date -Format yyyyMMdd)-${BackupType}"
-    
+
     $script = "${backupCommand} [${Database}] TO DISK = N'${BackupPath}' WITH NOFORMAT, NOINIT, NAME = N'${backupName}', SKIP, NOREWIND, NOUNLOAD, STATS = 10"
-    
+
     if ($CopyOnly) {
         $script += ", COPY_ONLY"
     }
-    
+
     return $script
 }
 
@@ -159,14 +159,14 @@ function New-ConnectionString() {
         [string]$DbName,
 
         [int]$Port,
-        
+
         [Parameter(ParameterSetName='SqlAuth', Mandatory=$true)]
         [PSCredential]$Credential,
-        
+
         # Deprecated parameters for backward compatibility
         [Parameter(ParameterSetName='LegacyAuth')]
         [string]$DbUser,
-        
+
         [Parameter(ParameterSetName='LegacyAuth')]
         [string]$DbPassword
     )
@@ -222,7 +222,7 @@ function Invoke-Sql() {
         [string]$Query,
 
         [int]$Timeout = 0,
-        
+
         [switch]$AsDataTable
       )
 
@@ -251,7 +251,7 @@ function Invoke-Sql() {
 			$Dataset = New-Object System.Data.DataSet
 			$Adapter.Fill($DataSet) | Out-Null
 		}
-		
+
         Catch {
             Write-Error "Query failed: $Query - $_"
             Throw $_
@@ -295,7 +295,7 @@ function Invoke-Sql() {
     }
 }
 
-function Invoke-AllSqlScripts() {
+function New-SqlDeployment() {
     [CmdletBinding()]
     Param (
         [Parameter(Mandatory = $true)]
@@ -328,9 +328,9 @@ function Invoke-AllSqlScripts() {
                 $Obj | Add-Member -MemberType NoteProperty -Name ConnectionString -Value $ConnectionString
                 $Obj | Add-Member -MemberType NoteProperty -Name Timeout -Value $Timeout
                 $Obj | Add-Member -MemberType NoteProperty -Name Force -Value $Force
-                $Obj | Add-Member -MemberType ScriptMethod -Name RunSql -Value { Invoke-SqlRunner }
+                $Obj | Add-Member -MemberType ScriptMethod -Name Execute -Value { Invoke-SqlRunner }
                 $Obj | Add-Member -MemberType NoteProperty -Name IsComplete -Value $false
-                $Obj | Add-Member -MemberType ScriptProperty -Name HasData -Value { ($this.Output -ne $null) -or ($this.Error -ne $null) }
+                $Obj | Add-Member -MemberType ScriptProperty -Name HasData -Value { ($null -ne $this.Output) -or ($null -ne $this.Error) }
                 $Obj | Add-Member -MemberType ScriptProperty -Name Md5Sum -Value { $this.File | Get-FileHash -Algorithm MD5 | Select-Object -ExpandProperty Hash }
                 $Obj | Add-Member -MemberType ScriptProperty -Name RelativePath -Value { $this.File.Directory.Name }
                 $Obj | Add-Member -MemberType ScriptProperty -Name NeedsToRun -Value { ($this.Md5Sum -notin $this.DbManifest) -or ($this.Force) }
@@ -348,7 +348,7 @@ function Invoke-AllSqlScripts() {
 
             return $ObjColl
         }
-            
+
         Catch {
             Throw $_
         }
@@ -439,14 +439,14 @@ function Restore-BackupFull() {
         [Parameter(Mandatory=$true)]
         [ValidateScript({ Test-Path $_ -PathType Leaf })]
         [string]$BackupPath,
-        
+
         [Parameter(Mandatory=$true)]
         [psobject]$NameSpaces,
 
         [switch]$KillAll,
 
         [switch]$Replace,
-        
+
         [switch]$WithRecovery
     )
 
@@ -597,7 +597,7 @@ function New-Endpoint() {
     Param (
         [Parameter(Mandatory=$true)]
         [psobject]$ConnectionString,
-        
+
         [int]$Port = 5022
     )
 
@@ -606,9 +606,9 @@ function New-Endpoint() {
     }
 
     Process {
-	    if (!(Get-Endpoint $ConnectionString)) { 
+	    if (!(Get-Endpoint $ConnectionString)) {
 	        Write-Verbose "Creating HADR endpoint on port $Port"
-	        Invoke-SimpleSqlQuery -ConnectionString $ConnectionString -Query $Script -UseMaster 
+	        Invoke-SimpleSqlQuery -ConnectionString $ConnectionString -Query $Script -UseMaster
 	    }
 	    else {
 	        Write-Verbose "HADR endpoint already exists"
@@ -637,7 +637,7 @@ function Get-DbUser() {
     Param (
         [Parameter(Mandatory=$true)]
         [psobject]$ConnectionString,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$UserName
     )
@@ -657,7 +657,7 @@ function New-DbUser() {
     Param (
         [Parameter(Mandatory=$true)]
         [psobject]$ConnectionString,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$UserName
     )
@@ -672,9 +672,9 @@ function New-DbUser() {
                 # Escape brackets in identifier by doubling them
                 $EscapedUserName = $UserName.Replace(']', ']]')
                 $Query = "CREATE LOGIN [$EscapedUserName] FROM WINDOWS"
-                
+
                 Invoke-SafeSqlCommand -ConnectionString $ConnectionString.Master -Query $Query -NonQuery
-                
+
                 Write-Verbose "Created login: $UserName"
             }
             Catch {
@@ -722,7 +722,7 @@ function Add-DbUser() {
     Param (
         [Parameter(Mandatory=$true)]
         [psobject]$ConnectionString,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$UserName,
 
@@ -745,9 +745,9 @@ function Add-DbUser() {
                 '@name_in_db' = $UserName
                 '@grpname' = $DbRole
             }
-            
+
             Invoke-SafeSqlCommand -ConnectionString $ConnectionString -Query $Query -Parameters $Params -NonQuery
-            
+
             Write-Verbose "Added user '$UserName' to database with role '$DbRole'"
         }
         Catch {
@@ -762,7 +762,7 @@ function Set-DbUserSchema() {
     Param (
         [Parameter(Mandatory=$true)]
         [psobject]$ConnectionString,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$UserName,
 
@@ -780,12 +780,12 @@ function Set-DbUserSchema() {
             # Escape brackets in identifiers by doubling them
             $EscapedUserName = $UserName.Replace(']', ']]')
             $EscapedDbSchema = $DbSchema.Replace(']', ']]')
-            
+
             # Build safe query with escaped identifiers
             $Query = "ALTER USER [$EscapedUserName] WITH DEFAULT_SCHEMA = [$EscapedDbSchema]"
-            
+
             Invoke-SafeSqlCommand -ConnectionString $ConnectionString -Query $Query -NonQuery
-            
+
             Write-Verbose "Set default schema for user '$UserName' to '$DbSchema'"
         }
         Catch {
@@ -800,7 +800,7 @@ function Set-EndpointACL() {
     Param (
         [Parameter(Mandatory=$true)]
         [psobject]$ConnectionString,
-        
+
         [Parameter(Mandatory=$true)]
         [string]$UserName
     )
@@ -809,7 +809,7 @@ function Set-EndpointACL() {
         Test-SqlIdentifier -Value $UserName -Type 'Username'
     	[string]$Script = "GRANT CONNECT ON ENDPOINT::HADR_ENDPOINT TO [${UserName}]"
     }
-	
+
     Process {
         Invoke-SimpleSqlQuery -ConnectionString $ConnectionString -Query $Script -UseMaster
     }
@@ -853,7 +853,7 @@ function New-Mirror() {
 		    Invoke-Sql -ConnectionString $SrcConnectionString.Master -Query "ALTER DATABASE [$($SrcConnectionString.InitialCatalog)] SET PARTNER = 'TCP://${DestFQDN}:${Port}'"
 		    return $true
 	    }
-	
+
         Catch {
 		    return $false
 	    }
@@ -953,11 +953,11 @@ function Get-SnapshotState() {
         [ValidateSet('Backup','Restore')]
         [string]$Phase
     )
-    
+
     Begin {
         [string]$Script = "select session_id, blocking_session_id, db_name(database_id) as [Database], command, percent_complete, wait_type,wait_time, wait_resource, scheduler_id, Qry.text from sys.dm_exec_requests req cross apply sys.fn_get_sql(req.sql_handle) as Qry where req.session_id>50 and command = '$($Phase.ToUpper()) DATABASE'"
     }
-    
+
     Process {
         Invoke-Sql -ConnectionString $ConnectionString -Query $Script
     }
@@ -1028,27 +1028,27 @@ function Export-DbSchema() {
     Param (
         [Parameter(Mandatory = $true)]
         [psobject]$ConnectionString,
-        
+
         [Parameter(Mandatory = $true)]
         [ValidateScript({ Test-Path $_ })]
         [string]$ExportPath
     )
 
     Write-Verbose "Exporting database schema from [$($ConnectionString.InitialCatalog)]"
-    
+
     # Export Tables
     Write-Verbose "Generating table DDL scripts..."
     $tableScript = @"
-SELECT 
+SELECT
     '-- Table: [' + SCHEMA_NAME(t.schema_id) + '].[' + t.name + ']' + CHAR(13) + CHAR(10) +
     'IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''[' + SCHEMA_NAME(t.schema_id) + '].[' + t.name + ']'') AND type = ''U'')' + CHAR(13) + CHAR(10) +
     'BEGIN' + CHAR(13) + CHAR(10) +
     'CREATE TABLE [' + SCHEMA_NAME(t.schema_id) + '].[' + t.name + '] (' + CHAR(13) + CHAR(10) +
     STUFF((
-        SELECT CHAR(9) + ',[' + c.name + '] ' + 
+        SELECT CHAR(9) + ',[' + c.name + '] ' +
                TYPE_NAME(c.user_type_id) +
-               CASE 
-                   WHEN TYPE_NAME(c.user_type_id) IN ('varchar','char','nvarchar','nchar') 
+               CASE
+                   WHEN TYPE_NAME(c.user_type_id) IN ('varchar','char','nvarchar','nchar')
                    THEN '(' + CASE WHEN c.max_length = -1 THEN 'MAX' ELSE CAST(CASE WHEN TYPE_NAME(c.user_type_id) LIKE 'n%' THEN c.max_length/2 ELSE c.max_length END AS VARCHAR) END + ')'
                    WHEN TYPE_NAME(c.user_type_id) IN ('decimal','numeric')
                    THEN '(' + CAST(c.precision AS VARCHAR) + ',' + CAST(c.scale AS VARCHAR) + ')'
@@ -1071,17 +1071,17 @@ FROM sys.tables t
 WHERE t.is_ms_shipped = 0
 ORDER BY SCHEMA_NAME(t.schema_id), t.name
 "@
-    
+
     $tableResults = Invoke-Sql -ConnectionString $ConnectionString -Query $tableScript -AsDataTable
     if ($tableResults) {
         $tableResults | Select-Object -ExpandProperty DDL | Out-File "$ExportPath\@Tables_Script.sql" -Encoding UTF8
         Write-Verbose "Table scripts exported to @Tables_Script.sql"
     }
-    
+
     # Export Views
     Write-Verbose "Generating view DDL scripts..."
     $viewScript = @"
-SELECT 
+SELECT
     '-- View: [' + SCHEMA_NAME(v.schema_id) + '].[' + v.name + ']' + CHAR(13) + CHAR(10) +
     'IF NOT EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N''[' + SCHEMA_NAME(v.schema_id) + '].[' + v.name + ']''))' + CHAR(13) + CHAR(10) +
     'BEGIN' + CHAR(13) + CHAR(10) +
@@ -1093,17 +1093,17 @@ INNER JOIN sys.sql_modules m ON v.object_id = m.object_id
 WHERE v.is_ms_shipped = 0
 ORDER BY SCHEMA_NAME(v.schema_id), v.name
 "@
-    
+
     $viewResults = Invoke-Sql -ConnectionString $ConnectionString -Query $viewScript -AsDataTable
     if ($viewResults) {
         $viewResults | Select-Object -ExpandProperty DDL | Out-File "$ExportPath\@Views_Script.sql" -Encoding UTF8
         Write-Verbose "View scripts exported to @Views_Script.sql"
     }
-    
+
     # Export Stored Procedures
     Write-Verbose "Generating stored procedure DDL scripts..."
     $procScript = @"
-SELECT 
+SELECT
     '-- Stored Procedure: [' + SCHEMA_NAME(p.schema_id) + '].[' + p.name + ']' + CHAR(13) + CHAR(10) +
     m.definition + CHAR(13) + CHAR(10) +
     'GO' + CHAR(13) + CHAR(10) AS DDL
@@ -1112,17 +1112,17 @@ INNER JOIN sys.sql_modules m ON p.object_id = m.object_id
 WHERE p.is_ms_shipped = 0
 ORDER BY SCHEMA_NAME(p.schema_id), p.name
 "@
-    
+
     $procResults = Invoke-Sql -ConnectionString $ConnectionString -Query $procScript -AsDataTable
     if ($procResults) {
         $procResults | Select-Object -ExpandProperty DDL | Out-File "$ExportPath\@Procs_Script.sql" -Encoding UTF8
         Write-Verbose "Stored procedure scripts exported to @Procs_Script.sql"
     }
-    
+
     # Export Functions
     Write-Verbose "Generating function DDL scripts..."
     $funcScript = @"
-SELECT 
+SELECT
     '-- Function: [' + SCHEMA_NAME(o.schema_id) + '].[' + o.name + ']' + CHAR(13) + CHAR(10) +
     m.definition + CHAR(13) + CHAR(10) +
     'GO' + CHAR(13) + CHAR(10) AS DDL
@@ -1132,17 +1132,17 @@ WHERE o.type IN ('FN', 'IF', 'TF')  -- Scalar, Inline Table-Valued, Table-Valued
   AND o.is_ms_shipped = 0
 ORDER BY SCHEMA_NAME(o.schema_id), o.name
 "@
-    
+
     $funcResults = Invoke-Sql -ConnectionString $ConnectionString -Query $funcScript -AsDataTable
     if ($funcResults) {
         $funcResults | Select-Object -ExpandProperty DDL | Out-File "$ExportPath\@Functions_Script.sql" -Encoding UTF8
         Write-Verbose "Function scripts exported to @Functions_Script.sql"
     }
-    
+
     # Export Triggers
     Write-Verbose "Generating trigger DDL scripts..."
     $triggerScript = @"
-SELECT 
+SELECT
     '-- Trigger: [' + SCHEMA_NAME(t.schema_id) + '].[' + tr.name + ']' + CHAR(13) + CHAR(10) +
     m.definition + CHAR(13) + CHAR(10) +
     'GO' + CHAR(13) + CHAR(10) AS DDL
@@ -1153,17 +1153,17 @@ WHERE tr.is_ms_shipped = 0
   AND tr.parent_class = 1  -- Object or column triggers
 ORDER BY SCHEMA_NAME(t.schema_id), t.name, tr.name
 "@
-    
+
     $triggerResults = Invoke-Sql -ConnectionString $ConnectionString -Query $triggerScript -AsDataTable
     if ($triggerResults) {
         $triggerResults | Select-Object -ExpandProperty DDL | Out-File "$ExportPath\@Triggers_Script.sql" -Encoding UTF8
         Write-Verbose "Trigger scripts exported to @Triggers_Script.sql"
     }
-    
+
     # Export Database Triggers
     Write-Verbose "Generating database trigger DDL scripts..."
     $dbTriggerScript = @"
-SELECT 
+SELECT
     '-- Database Trigger: [' + tr.name + ']' + CHAR(13) + CHAR(10) +
     m.definition + CHAR(13) + CHAR(10) +
     'GO' + CHAR(13) + CHAR(10) AS DDL
@@ -1173,13 +1173,13 @@ WHERE tr.is_ms_shipped = 0
   AND tr.parent_class = 0  -- Database triggers
 ORDER BY tr.name
 "@
-    
+
     $dbTriggerResults = Invoke-Sql -ConnectionString $ConnectionString -Query $dbTriggerScript -AsDataTable
     if ($dbTriggerResults) {
         $dbTriggerResults | Select-Object -ExpandProperty DDL | Out-File "$ExportPath\@DBTriggers_Script.sql" -Encoding UTF8
         Write-Verbose "Database trigger scripts exported to @DBTriggers_Script.sql"
     }
-    
+
     Write-Verbose "Schema export complete for [$($ConnectionString.InitialCatalog)]"
 }
 
@@ -1198,7 +1198,7 @@ CREATE TABLE SqlDeployManifest (
 )
 END
 
-IF OBJECT_ID(N'[dbo].[trg_SqlDeployManifest_update]') IS NULL 
+IF OBJECT_ID(N'[dbo].[trg_SqlDeployManifest_update]') IS NULL
 BEGIN
 	EXEC('
 		CREATE TRIGGER [dbo].[trg_SqlDeployManifest_update] ON [dbo].[SqlDeployManifest]

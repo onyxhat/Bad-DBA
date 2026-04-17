@@ -443,18 +443,22 @@ Import-Module Bad-DBA
 
 $cs = New-ConnectionString -DbServer "SQL01" -DbName "Prod"
 
-# Deploy all changed scripts
-$results = Invoke-AllSqlScripts -ConnectionString $cs -SqlPath ".\migrations" -Timeout 300
+# Build SQL deployment object(s)
+$run_all = New-SqlDeployment -ConnectionString $cs -SqlPath ".\always_run\" -Force
+$scripts = New-SqlDeployment -ConnectionString $cs -SqlPath ".\migration_scripts\"
+
+# Execute deployment(s)
+$run_all.Execute()
+$scripts.Execute()
 
 # Check results
-$executed = $results | Where-Object { $_.NeedsToRun }
-$failed = $executed | Where-Object { $_.Failed }
+$results = $run_all + $scripts
 
-if ($failed) {
-    Write-Error "Deployment failed on $($failed.Count) scripts."
-    $failed | Format-Table Name, Error
+if ($results.Failed -contains $true) {
+    Write-Error "Deployment failed."
+    $results | ? { $_.Failed } | Format-Table Name, Error
 } else {
-    Write-Host "Deployment successful! $($executed.Count) scripts run."
+    Write-Host "Deployment successful."
 }
 ```
 
