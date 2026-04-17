@@ -82,7 +82,7 @@ FunctionsToExport = @(
     'Get-SnapshotState',
     'Get-SqlDefaultLocation',
     'Get-SysDatabases',
-    'Invoke-AllSqlScripts',
+    'New-SqlDeployment',
     'Invoke-DbShrink',
     'Invoke-Sql',
     'New-BackupFull',

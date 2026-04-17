@@ -111,7 +111,7 @@ CREATE TABLE SqlDeployManifest (
 )
 ```
 
-The table and an associated trigger are automatically created by `Invoke-AllSqlScripts` if they do not exist.
+The table and an associated trigger are automatically created by `New-SqlDeployment` if they do not exist.
 
 ---
 
@@ -167,7 +167,7 @@ $data = Invoke-Sql -ConnectionString $cs -Query "SELECT TOP 10 name FROM sys.obj
 $data | ForEach-Object { Write-Host "Found object: $($_.name)" }
 ```
 
-#### Invoke-AllSqlScripts
+#### New-SqlDeployment
 
 Executes all `.sql` files in a directory tree with MD5-based change tracking.
 
@@ -191,7 +191,8 @@ Executes all `.sql` files in a directory tree with MD5-based change tracking.
 $cs = New-ConnectionString -DbServer "SQL01" -DbName "Prod"
 
 # Run all changed scripts
-$results = Invoke-AllSqlScripts -ConnectionString $cs -SqlPath ".\migrations"
+$results = New-SqlDeployment -ConnectionString $cs -SqlPath ".\migrations"
+$results.Execute()
 
 # Show execution summary
 $results | Where-Object { $_.NeedsToRun } | Format-Table Name, IsComplete, Failed
@@ -483,7 +484,7 @@ Invoke-Sql -ConnectionString $cs -Query "SELECT 1"
 **Problem:** Scripts execute every time despite no changes
 
 **Solution:**
-Verify the `SqlDeployManifest` table exists and contains the correct MD5 hashes. The module automatically creates this table on the first run of `Invoke-AllSqlScripts`.
+Verify the `SqlDeployManifest` table exists and contains the correct MD5 hashes. The module automatically creates this table on the first run of `New-SqlDeployment`.
 
 ### Schema Export Failures
 
